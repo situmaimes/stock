@@ -99,7 +99,7 @@ def main(over=None):
     column5 = []
     over = over if over else 1000  # 现手以上
 
-    # 读取带查询股票
+    # 读取待查询股票
     all_data = pd.read_excel(r"C:\Users\Si tu m'aimes\Documents\Tencent Files\1255754523\FileRecv\股票代码汇总.xls")
     all_data.columns = ["code", "name"]
     all_data.code = all_data.code.str.replace("SZ", "sz").str.replace("SH", "sh")
