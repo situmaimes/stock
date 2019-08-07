@@ -64,7 +64,9 @@ def download(date, all_codes, over):
     download_end = now()
     print(f"下载用时 {download_end - download_start} s")
 
+    # params["d"] = date
     # codes = []
+    # download_start = now()
     # for code in all_codes:
     #     params["c"] = code
     #     res = requests.get(url, params=params)
@@ -80,6 +82,8 @@ def download(date, all_codes, over):
     #         line.name = code
     #         codes.append(line)
     #         df.to_excel(f"data/{date}/{code}.xls")
+    # download_end = now()
+    # print(f"下载用时 {download_end - download_start} s")
 
     return codes
 
@@ -210,22 +214,3 @@ if __name__ == '__main__':
     main()
     end = now()
     print(f"总用时 {end - start} s")
-
-
-# def run(code):
-#     return code, ts.get_tick_data(code, date=date, src='tt')
-#
-# def callback(args):
-#     code, df = args
-#     df.to_excel(f"{date}/{code}.xls")
-#
-# start = time.clock()
-# pool = Pool()
-# for i in codes:
-#     pool.apply_async(run, (i,), callback=callback)
-#
-# print(pool)
-# pool.close()
-# pool.join()
-# end = time.clock()
-# print(f"用时 {end - start} s")
