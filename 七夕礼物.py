@@ -8,6 +8,9 @@ from itertools import chain
 import aiohttp
 import pandas as pd
 
+from config import codes_path, send_to
+from mail import send_mail
+
 url = 'http://stock.gtimg.cn/data/index.php'
 
 params = {
@@ -44,8 +47,9 @@ def download(date, all_codes, over):
         async with semaphore:
             data = await download_one(code)
             if data and data != "暂无数据":
-                df = pd.read_table(StringIO(data), names=['time', 'price', 'change', 'volume', 'amount', 'type'],
-                                   skiprows=[0])
+                df = pd.read_csv(StringIO(data.text), sep="\t",
+                                 names=['time', 'price', 'change', 'volume', 'amount', 'type'],
+                                 skiprows=[0])
                 if df.shape[0] == 0:
                     print(f"{code} no data")
                     return
@@ -104,7 +108,7 @@ def main(over=None):
     over = over if over else 1000  # 现手以上
 
     # 读取待查询股票
-    all_data = pd.read_excel(r"C:\Users\Si tu m'aimes\Documents\Tencent Files\1255754523\FileRecv\股票代码汇总.xls")
+    all_data = pd.read_excel(codes_path)
     all_data.columns = ["code", "name"]
     all_data.code = all_data.code.str.replace("SZ", "sz").str.replace("SH", "sh")
     all_data = all_data.set_index(['code'])
@@ -206,6 +210,10 @@ def main(over=None):
     final_codes["condition"] = condition
     final_codes.sort_values(by="volume", ascending=False, inplace=True)
     final_codes.to_excel(f"result/{today}排序.xls")
+
+    # 发送邮件
+    send_mail(send_tos=[send_to], name="Simon Yang", subject=f"{today}结果", text="请查收附件。",
+              att_urls=[f"result/{today}结果.xls"])
 
 
 if __name__ == '__main__':
