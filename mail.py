@@ -6,7 +6,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import formataddr
 
-from config import host, username, password, send_to
+from config import host, username, password, send_tos
 
 
 def loginToServer(host, user, password):
@@ -19,7 +19,7 @@ def loginToServer(host, user, password):
         return
 
 
-def getmsg(text='', att_urls=''):
+def getmsg(text, att_urls):
     msg = MIMEMultipart('mixed')
     if text:
         msg.attach(MIMEText(text, 'plain', 'gbk'))
@@ -34,10 +34,10 @@ def getmsg(text='', att_urls=''):
     return msg
 
 
-def send_mail(send_tos, name, subject, text, att_urls):
+def send_mail(send_tos, name, subject, text, att_urls=None):
     with closing(loginToServer(host, username, password)) as server:
         if server:
-            msg = getmsg(text="你好：\n    " + text, att_urls=att_urls)
+            msg = getmsg(text="你好：\n" + text, att_urls=att_urls)
             msg['From'] = formataddr([name, username])
             msg['Subject'] = Header(subject, "utf-8").encode()
             server.sendmail(username, send_tos, msg.as_string())
@@ -49,5 +49,4 @@ def send_mail(send_tos, name, subject, text, att_urls):
 
 if __name__ == "__main__":
     att_urls = ["result/20190808结果.xls"]
-    send_tos = [send_to]
     send_mail(send_tos=send_tos, name="Simon Yang", subject="20190808结果", text="请查收附件。", att_urls=att_urls)

@@ -3,13 +3,15 @@ import datetime
 import os
 import time
 from io import StringIO
-from itertools import chain
 
 import aiohttp
 import pandas as pd
+import requests
 
-from config import codes_path, send_to
+from config import codes_path, send_tos
 from mail import send_mail
+
+# from itertools import chain
 
 url = 'http://stock.gtimg.cn/data/index.php'
 
@@ -29,8 +31,9 @@ def now():
 
 
 def download(date, all_codes, over):
+    # todo：handle aiohttp.client_exceptions.ServerDisconnectedError
     params["d"] = date
-    semaphore = asyncio.Semaphore(500)
+    semaphore = asyncio.Semaphore(200)
 
     async def download_one(code):
         params["c"] = code
@@ -47,7 +50,7 @@ def download(date, all_codes, over):
         async with semaphore:
             data = await download_one(code)
             if data and data != "暂无数据":
-                df = pd.read_csv(StringIO(data.text), sep="\t",
+                df = pd.read_csv(StringIO(data), sep="\t",
                                  names=['time', 'price', 'change', 'volume', 'amount', 'type'],
                                  skiprows=[0])
                 if df.shape[0] == 0:
@@ -59,14 +62,11 @@ def download(date, all_codes, over):
                     df.to_excel(f"data/{date}/{code}.xls")
                     return line
 
-    download_start = now()
     tasks = [asyncio.ensure_future(process_one(code)) for code in all_codes]
     event_loop = asyncio.get_event_loop()
     event_loop.run_until_complete(asyncio.wait(tasks))
     codes = [task.result() for task in tasks]
     codes = list(filter(lambda x: x is not None, codes))
-    download_end = now()
-    print(f"下载用时 {download_end - download_start} s")
 
     # params["d"] = date
     # codes = []
@@ -92,7 +92,8 @@ def download(date, all_codes, over):
     return codes
 
 
-def main(over=None):
+def run(over=None):
+    text = ''
     # 创建存储文件夹
     if not os.path.exists("data"):
         os.makedirs("data")
@@ -113,21 +114,23 @@ def main(over=None):
     all_data.code = all_data.code.str.replace("SZ", "sz").str.replace("SH", "sh")
     all_data = all_data.set_index(['code'])
 
-    # 筛选 现手卖盘大于1000数据下载或读取
+    # 筛选 现手卖盘大于over数据下载或读取
     if not os.path.isdir(f"data/{today}"):
         os.makedirs(f"data/{today}")
+        download_start = now()
         codes_data = download(date=today, all_codes=all_data.index, over=over)
+        download_end = now()
+        text += f"下载用时 {download_end - download_start} s\n"
         codes_data.sort(key=lambda x: x["volume"], reverse=True)
         codes = [i.name for i in codes_data]
-        print(f"已下载 {today_print} 现手卖盘大于 {over} 的股票:{codes}")
-        print(f"共计 {len(codes)} 个")
+        print(f"已下载 {today_print} 现手卖盘大于 {over} 的股票共计 {len(codes)} 个")
         filter_codes = all_data.loc[codes]
         filter_codes["volume"] = [i["volume"] for i in codes_data]
     else:
         print("已有下载，正在读取相应目录")
         files = os.listdir(f"data/{today}")
         codes = [i[:-4] for i in files]
-        filter_codes = all_data.loc[codes]
+        # filter_codes = all_data.loc[codes]
 
     # 情况1-5筛选
     for code in codes:
@@ -186,9 +189,9 @@ def main(over=None):
 
     # 数据汇总写出
     final_data = [column1, column2, column3, column4, column5]
-    condition = [[f"情况{i+1}"] * len(data) for i, data in enumerate(final_data)]
-    condition = list(chain(*condition))
-    all_columns = list(chain(*final_data))
+    # condition = [[f"情况{i+1}"] * len(data) for i, data in enumerate(final_data)]
+    # condition = list(chain(*condition))
+    # all_columns = list(chain(*final_data))
     final_name_data = [[all_data.loc[i]["name"] for i in j] for j in final_data]
     max_len = max(len(item) for item in final_name_data)
     for item in final_name_data:
@@ -201,24 +204,38 @@ def main(over=None):
                            "情况4": final_name_data[3],
                            "情况5": final_name_data[4]})
 
-    print(f"情况 1~5 符合条件数目 {[len(item) for item in final_data]}")
+    text += f"情况 1~5 符合条件数目 {[len(item) for item in final_data]}\n"
     # print(f"结果如下:")
     # print(result)
     result.to_excel(f"result/{today}结果.xls", index=False)
 
-    final_codes = filter_codes.loc[all_columns]
-    final_codes["condition"] = condition
-    final_codes.sort_values(by="volume", ascending=False, inplace=True)
-    final_codes.to_excel(f"result/{today}排序.xls")
+    # final_codes = filter_codes.loc[all_columns]
+    # final_codes["condition"] = condition
+    # final_codes.sort_values(by="volume", ascending=False, inplace=True)
+    # final_codes.to_excel(f"result/{today}排序.xls")
 
-    # 发送邮件
-    send_mail(send_tos=[send_to], name="Simon Yang", subject=f"{today}结果", text="请查收附件。",
-              att_urls=[f"result/{today}结果.xls"])
+    return text
+
+
+def is_weekday(date):
+    params["d"] = date
+    resp = requests.get(url, params=params)
+    resp.encoding = "gbk"
+    return resp.text != '暂无数据'
+
+
+def main():
+    if is_weekday(today):
+        start = now()
+        text = run()
+        end = now()
+        text += f"总用时 {end - start} s\n"
+        text = f"今天是 {today_print}\n" + text + "请查收附件."
+        send_mail(send_tos=send_tos, name="Simon Yang", subject=f"{today_print}结果", text=text,
+                  att_urls=[f"result/{today}结果.xls"])
+    else:
+        send_mail(send_tos=send_tos, name="Simon Yang", subject=f"{today_print}结果", text="今天休市，无数据")
 
 
 if __name__ == '__main__':
-    start = now()
-    print(f"今天是 {today_print} ")
     main()
-    end = now()
-    print(f"总用时 {end - start} s")
